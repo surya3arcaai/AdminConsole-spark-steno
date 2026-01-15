@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: arca_spark_db
+    environment:
+      POSTGRES_USER: arca_admin
+      POSTGRES_PASSWORD: arca_secret_2026
+      POSTGRES_DB: arca_spark_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arca_admin -d arca_spark_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rbac-service:
+    build:
+      context: .
+      dockerfile: rbac-service/Dockerfile
+    container_name: rbac_service
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://arca_admin:arca_secret_2026@postgres:5432/arca_spark_db
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
+      - JWT_ALGORITHM=HS256
+      - SERVICE_PORT=8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./shared:/app/shared:ro
+
+  user-onboarding-service:
+    build:
+      context: .
+      dockerfile: user-onboarding-service/Dockerfile
+    container_name: user_onboarding_service
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://arca_admin:arca_secret_2026@postgres:5432/arca_spark_db
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
+      - JWT_ALGORITHM=HS256
+      - SERVICE_PORT=8002
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./shared:/app/shared:ro
+
+  template-service:
+    build:
+      context: .
+      dockerfile: template-service/Dockerfile
+    container_name: template_service
+    ports:
+      - "8003:8003"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://arca_admin:arca_secret_2026@postgres:5432/arca_spark_db
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
+      - JWT_ALGORITHM=HS256
+      - SERVICE_PORT=8003
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./shared:/app/shared:ro
+
+  logs-service:
+    build:
+      context: .
+      dockerfile: logs-service/Dockerfile
+    container_name: logs_service
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://arca_admin:arca_secret_2026@postgres:5432/arca_spark_db
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
+      - JWT_ALGORITHM=HS256
+      - SERVICE_PORT=8004
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./shared:/app/shared:ro
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: arca_spark_network
