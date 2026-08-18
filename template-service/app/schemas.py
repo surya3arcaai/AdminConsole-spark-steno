@@ -45,6 +45,7 @@ class TemplateSummaryResponse(BaseModel):
     type: str
     name: str
     description: Optional[str]
+    content: str
     version: int
     status: str
     created_at: datetime

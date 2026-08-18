@@ -17,21 +17,39 @@ from .schemas import (
     DepartmentCreate, LocationCreate, SpecializationCreate,
     RegistrationCreate, RegistrationUpdate, EIDConfigUpdate,
 )
+import logging
 from shared.exceptions import NotFoundException, ConflictException, ValidationException
+
+logger = logging.getLogger("arca_spark")
 
 
 # ============== Department CRUD ==============
 
 async def create_department(db: AsyncSession, data: DepartmentCreate) -> Department:
+    from fastapi import HTTPException
+    logger.info(f"Creating department request: name='{data.name}', code='{data.code}'")
     existing = await db.execute(select(Department).where(Department.name == data.name))
     if existing.scalar_one_or_none():
-        raise ConflictException(resource=f"Department '{data.name}'")
+        logger.warning(f"Department creation failed: '{data.name}' already exists.")
+        raise HTTPException(status_code=409, detail=f"Department '{data.name}' already exists.")
 
-    dept = Department(**data.model_dump())
-    db.add(dept)
-    await db.flush()
-    await db.refresh(dept)
-    return dept
+    dept_data = data.model_dump()
+    if not dept_data.get("code"):
+        import re
+        clean_code = re.sub(r'[^A-Z0-9_-]', '', data.name.upper().replace(' ', '_'))[:50]
+        dept_data["code"] = clean_code if clean_code else "DEPT"
+
+    try:
+        dept = Department(**dept_data)
+        db.add(dept)
+        await db.flush()
+        await db.refresh(dept)
+        logger.info(f"Department created successfully: id={dept.id}, name='{dept.name}', code='{dept.code}'")
+        return dept
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Database error creating department '{data.name}': {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Database error creating department: {str(e)}")
 
 
 async def get_departments(db: AsyncSession) -> List[Department]:
@@ -42,15 +60,20 @@ async def get_departments(db: AsyncSession) -> List[Department]:
 # ============== Location CRUD ==============
 
 async def create_location(db: AsyncSession, data: LocationCreate) -> Location:
+    from fastapi import HTTPException
     existing = await db.execute(select(Location).where(Location.name == data.name))
     if existing.scalar_one_or_none():
-        raise ConflictException(resource=f"Location '{data.name}'")
+        raise HTTPException(status_code=409, detail=f"Location '{data.name}' already exists.")
 
-    loc = Location(**data.model_dump())
-    db.add(loc)
-    await db.flush()
-    await db.refresh(loc)
-    return loc
+    try:
+        loc = Location(**data.model_dump())
+        db.add(loc)
+        await db.flush()
+        await db.refresh(loc)
+        return loc
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=f"Database error creating location: {str(e)}")
 
 
 async def get_locations(db: AsyncSession) -> List[Location]:
@@ -61,15 +84,20 @@ async def get_locations(db: AsyncSession) -> List[Location]:
 # ============== Specialization CRUD ==============
 
 async def create_specialization(db: AsyncSession, data: SpecializationCreate) -> Specialization:
+    from fastapi import HTTPException
     existing = await db.execute(select(Specialization).where(Specialization.name == data.name))
     if existing.scalar_one_or_none():
-        raise ConflictException(resource=f"Specialization '{data.name}'")
+        raise HTTPException(status_code=409, detail=f"Specialization '{data.name}' already exists.")
 
-    spec = Specialization(**data.model_dump())
-    db.add(spec)
-    await db.flush()
-    await db.refresh(spec)
-    return spec
+    try:
+        spec = Specialization(**data.model_dump())
+        db.add(spec)
+        await db.flush()
+        await db.refresh(spec)
+        return spec
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=f"Database error creating specialization: {str(e)}")
 
 
 async def get_specializations(db: AsyncSession) -> List[Specialization]:
@@ -131,6 +159,151 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
     await db.flush()
     await db.refresh(user)
     return user
+
+
+async def delete_user_from_keycloak(keycloak_user_id: str) -> bool:
+    import httpx
+    from .config import settings
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            token_url = f"{settings.keycloak_server_url}/realms/master/protocol/openid-connect/token"
+            token_resp = await client.post(
+                token_url,
+                data={
+                    "grant_type": "password",
+                    "client_id": "admin-cli",
+                    "username": settings.keycloak_admin_username,
+                    "password": settings.keycloak_admin_password,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"}
+            )
+            if token_resp.status_code == 200:
+                admin_token = token_resp.json().get("access_token")
+                delete_url = f"{settings.keycloak_server_url}/admin/realms/{settings.keycloak_realm}/users/{keycloak_user_id}"
+                del_resp = await client.delete(
+                    delete_url,
+                    headers={"Authorization": f"Bearer {admin_token}"}
+                )
+                if del_resp.status_code in [200, 204]:
+                    logger.info(f"🧹 Successfully deleted user from Keycloak: {keycloak_user_id}")
+                    return True
+                else:
+                    logger.warning(f"⚠️ Failed to delete user {keycloak_user_id} from Keycloak: {del_resp.status_code} - {del_resp.text}")
+    except Exception as e:
+        logger.error(f"❌ Exception deleting Keycloak user {keycloak_user_id}: {e}")
+    return False
+
+
+async def create_user_with_keycloak(db: AsyncSession, name: str, email: str, phone: str, password: str) -> User:
+    import uuid
+    import httpx
+    from .config import settings
+
+    logger.info(f"🔑 Starting /registerUser onboarding for email='{email}', name='{name}'")
+    existing = await db.execute(select(User).where(User.email == email))
+    if existing.scalar_one_or_none():
+        logger.warning(f"❌ User registration failed: User with email '{email}' already exists in PostgreSQL.")
+        raise ConflictException(resource=f"User with email '{email}'")
+
+    keycloak_user_id = str(uuid.uuid4())
+    created_in_keycloak = False
+
+    try:
+        name_parts = (name or "").strip().split()
+        first_name = name_parts[0] if name_parts else "-"
+        last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else "-"
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            token_url = f"{settings.keycloak_server_url}/realms/master/protocol/openid-connect/token"
+            logger.info(f"🌐 Requesting Keycloak Admin token via admin-cli: {token_url}")
+            token_resp = await client.post(
+                token_url,
+                data={
+                    "grant_type": "password",
+                    "client_id": "admin-cli",
+                    "username": settings.keycloak_admin_username,
+                    "password": settings.keycloak_admin_password,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"}
+            )
+
+            if token_resp.status_code == 200:
+                admin_token = token_resp.json().get("access_token")
+                logger.info("✅ Keycloak Admin token successfully obtained.")
+
+                keycloak_user = {
+                    "username": email,
+                    "email": email,
+                    "firstName": first_name,
+                    "lastName": last_name,
+                    "enabled": True,
+                    "emailVerified": False,
+                    "credentials": [
+                        {
+                            "type": "password",
+                            "value": password,
+                            "temporary": False
+                        }
+                    ]
+                }
+
+                create_user_url = f"{settings.keycloak_server_url}/admin/realms/{settings.keycloak_realm}/users"
+                logger.info(f"👤 Creating user in Keycloak realm '{settings.keycloak_realm}': {create_user_url}")
+                user_resp = await client.post(
+                    create_user_url,
+                    json=keycloak_user,
+                    headers={
+                        "Authorization": f"Bearer {admin_token}",
+                        "Content-Type": "application/json"
+                    }
+                )
+
+                if user_resp.status_code == 201:
+                    location = user_resp.headers.get("Location")
+                    if location:
+                        keycloak_user_id = location.split("/")[-1]
+                    created_in_keycloak = True
+                    logger.info(f"🎉 Keycloak user created successfully with ID: {keycloak_user_id}")
+                elif user_resp.status_code == 409:
+                    logger.warning(f"⚠️ User '{email}' already exists in Keycloak (409 Conflict). Fetching existing ID...")
+                    search_url = f"{settings.keycloak_server_url}/admin/realms/{settings.keycloak_realm}/users"
+                    search_resp = await client.get(
+                        search_url,
+                        params={"email": email},
+                        headers={"Authorization": f"Bearer {admin_token}"}
+                    )
+                    if search_resp.status_code == 200:
+                        users_found = search_resp.json()
+                        if users_found:
+                            keycloak_user_id = users_found[0]["id"]
+                            logger.info(f"Found existing Keycloak user ID: {keycloak_user_id}")
+                else:
+                    logger.error(f"❌ Keycloak user creation failed: HTTP {user_resp.status_code} - {user_resp.text}")
+            else:
+                logger.error(f"❌ Keycloak admin token request failed: HTTP {token_resp.status_code} - {token_resp.text}")
+    except Exception as e:
+        logger.error(f"⚠️ Exception during Keycloak API interaction: {e}", exc_info=True)
+
+    logger.info(f"💾 Saving user to PostgreSQL database with Keycloak ID='{keycloak_user_id}', email='{email}'")
+    try:
+        user = User(
+            id=keycloak_user_id,
+            name=name,
+            email=email,
+            phone=phone,
+            status=UserStatus.PENDING.value
+        )
+        db.add(user)
+        await db.flush()
+        await db.refresh(user)
+        logger.info(f"✅ User saved to PostgreSQL successfully: id={user.id}")
+        return user
+    except Exception as e:
+        await db.rollback()
+        if created_in_keycloak:
+            logger.error(f"❌ PostgreSQL database insert failed for '{email}': {e}. Cleaning up Keycloak user '{keycloak_user_id}'...")
+            await delete_user_from_keycloak(keycloak_user_id)
+        raise e
 
 
 async def get_user(db: AsyncSession, user_id: str) -> User:
@@ -223,6 +396,7 @@ async def delete_user(db: AsyncSession, user_id: str) -> None:
     user = await get_user(db, user_id)
     await db.delete(user)
     await db.flush()
+    await delete_user_from_keycloak(user_id)
 
 
 async def assign_eid_to_user(db: AsyncSession, user_id: str, eid: Optional[str] = None) -> User:

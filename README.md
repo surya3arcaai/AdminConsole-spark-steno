@@ -67,6 +67,9 @@ cd AdminConsole-spark-steno
 # Start all services
 docker-compose up -d
 
+#restart all services
+docker-compose up -d --build
+
 # Check service health
 curl http://localhost:8001/health  # RBAC
 curl http://localhost:8002/health  # User Onboarding
@@ -87,7 +90,7 @@ pip install -r rbac-service/requirements.txt
 # ... repeat for other services
 
 # Set environment variables
-export DATABASE_URL="postgresql+asyncpg://arca_admin:arca_secret_2026@localhost:5432/arca_spark_db"
+export DATABASE_URL="postgresql://postgres:Password%40123@192.168.112.6:31155/arca-spark"
 export JWT_SECRET_KEY="your-secret-key"
 
 # Run a service

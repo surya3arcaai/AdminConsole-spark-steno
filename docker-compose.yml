@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: arca_secret_2026
       POSTGRES_DB: arca_spark_db
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,13 +26,10 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://arca_admin:arca_secret_2026@postgres:5432/arca_spark_db
+      - DATABASE_URL=postgresql+asyncpg://postgres:Password%40123@192.168.112.6:31155/arca-spark
       - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
       - JWT_ALGORITHM=HS256
       - SERVICE_PORT=8001
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
       - ./shared:/app/shared:ro
 
@@ -42,15 +39,18 @@ services:
       dockerfile: user-onboarding-service/Dockerfile
     container_name: user_onboarding_service
     ports:
-      - "8002:8002"
+      - "8005:8005"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://arca_admin:arca_secret_2026@postgres:5432/arca_spark_db
+      - DATABASE_URL=postgresql+asyncpg://postgres:Password%40123@192.168.112.6:31155/arca-spark
       - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
       - JWT_ALGORITHM=HS256
-      - SERVICE_PORT=8002
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - SERVICE_PORT=8005
+      - KEYCLOAK_SERVER_URL=http://192.168.112.6:31636
+      - KEYCLOAK_REALM=arca-spark
+      - KEYCLOAK_CLIENT_ID=arca-spark
+      - KEYCLOAK_CLIENT_SECRET=ihdp5bhmgBsd1kWEYeyJxHeDrf7ln5ji
+      - KEYCLOAK_ADMIN_USERNAME=admin
+      - KEYCLOAK_ADMIN_PASSWORD=Password@123
     volumes:
       - ./shared:/app/shared:ro
 
@@ -62,13 +62,10 @@ services:
     ports:
       - "8003:8003"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://arca_admin:arca_secret_2026@postgres:5432/arca_spark_db
+      - DATABASE_URL=postgresql+asyncpg://postgres:Password%40123@192.168.112.6:31155/arca-spark
       - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
       - JWT_ALGORITHM=HS256
       - SERVICE_PORT=8003
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
       - ./shared:/app/shared:ro
 
@@ -80,13 +77,10 @@ services:
     ports:
       - "8004:8004"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://arca_admin:arca_secret_2026@postgres:5432/arca_spark_db
+      - DATABASE_URL=postgresql+asyncpg://postgres:Password%40123@192.168.112.6:31155/arca-spark
       - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
       - JWT_ALGORITHM=HS256
       - SERVICE_PORT=8004
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
       - ./shared:/app/shared:ro
 

@@ -10,19 +10,36 @@ from shared.database import get_db
 from shared.auth import get_current_user, UserContext
 from shared.schemas import PaginatedResponse, SuccessResponse
 
-from ..schemas import (
-    UserCreate, UserUpdate, UserDemographicsUpdate,
-    UserResponse, UserDetailResponse,
-    RegistrationCreate, RegistrationUpdate, RegistrationResponse, VerifyRegistrationResponse,
-    SupervisorAssignRequest, SupervisorResponse, ReporteeResponse,
-    EIDGenerateResponse, EIDValidateResponse,
-)
-from .. import crud
+from app import crud
+from app.schemas import (
+        UserCreate, RegisterUserRequest, UserUpdate, UserDemographicsUpdate,
+        UserResponse, UserDetailResponse,
+        RegistrationCreate, RegistrationUpdate, RegistrationResponse, VerifyRegistrationResponse,
+        SupervisorAssignRequest, SupervisorResponse, ReporteeResponse,
+        EIDGenerateResponse, EIDValidateResponse,
+    )
 
 router = APIRouter(tags=["Users"])
 
 
 # ============== User CRUD ==============
+
+@router.post("/registerUser", response_model=UserResponse, status_code=201)
+async def register_user(
+    data: RegisterUserRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    """Register a new user with Keycloak & database entry."""
+    user = await crud.create_user_with_keycloak(
+        db=db,
+        name=data.name,
+        email=data.email,
+        phone=data.phone,
+        password=data.password
+    )
+    return user
+
 
 @router.post("/", response_model=UserResponse, status_code=201)
 async def create_user(

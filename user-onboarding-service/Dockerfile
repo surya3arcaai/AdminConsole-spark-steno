@@ -18,7 +18,7 @@ COPY user-onboarding-service/alembic.ini /app/alembic.ini
 ENV PYTHONPATH=/app
 
 # Expose port
-EXPOSE 8002
+EXPOSE 8005
 
 # Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8005"]

@@ -27,11 +27,15 @@ def generate_uuid():
     return str(uuid.uuid4())
 
 
-class UserStatus(enum.Enum):
+class UserStatus(str, enum.Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     PENDING = "pending"
     SUSPENDED = "suspended"
+    active = "active"
+    inactive = "inactive"
+    pending = "pending"
+    suspended = "suspended"
 
 
 class Department(Base):
@@ -39,7 +43,7 @@ class Department(Base):
 
     __tablename__ = "departments"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
     name = Column(String(200), unique=True, nullable=False, index=True)
     code = Column(String(50), unique=True, nullable=False)
     description = Column(Text, nullable=True)
@@ -54,7 +58,7 @@ class Location(Base):
 
     __tablename__ = "locations"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
     name = Column(String(200), unique=True, nullable=False, index=True)
     address = Column(Text, nullable=True)
     city = Column(String(100), nullable=True)
@@ -69,7 +73,7 @@ class Specialization(Base):
 
     __tablename__ = "specializations"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
     name = Column(String(200), unique=True, nullable=False, index=True)
     category = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -83,7 +87,7 @@ class EIDConfig(Base):
 
     __tablename__ = "eid_config"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
     prefix = Column(String(20), default="EMP", nullable=False)
     sequence_start = Column(Integer, default=1000, nullable=False)
     current_sequence = Column(Integer, default=1000, nullable=False)
@@ -96,17 +100,17 @@ class User(Base):
 
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
     name = Column(String(200), nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     eid = Column(String(50), unique=True, nullable=True, index=True)
     phone = Column(String(20), nullable=True)
-    status = Column(SQLEnum(UserStatus), default=UserStatus.PENDING, nullable=False)
+    status = Column(String(50), default="pending", nullable=False)
 
     # Demographics
-    department_id = Column(UUID(as_uuid=False), ForeignKey("departments.id"), nullable=True)
-    location_id = Column(UUID(as_uuid=False), ForeignKey("locations.id"), nullable=True)
-    specialization_id = Column(UUID(as_uuid=False), ForeignKey("specializations.id"), nullable=True)
+    department_id = Column(String(255), ForeignKey("departments.id"), nullable=True)
+    location_id = Column(String(255), ForeignKey("locations.id"), nullable=True)
+    specialization_id = Column(String(255), ForeignKey("specializations.id"), nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -136,8 +140,8 @@ class Registration(Base):
 
     __tablename__ = "registrations"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
-    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
     registration_number = Column(String(100), unique=True, nullable=False, index=True)
     council_name = Column(String(200), nullable=False)
     verified = Column(Boolean, default=False, nullable=False)
@@ -155,9 +159,9 @@ class SupervisorAssignment(Base):
 
     __tablename__ = "supervisor_assignments"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
-    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
-    supervisor_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    supervisor_id = Column(String(255), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     assigned_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     assigned_by = Column(String(100), nullable=True)  # External user ID who made the assignment
 
@@ -171,8 +175,8 @@ class AudioSample(Base):
 
     __tablename__ = "audio_samples"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
-    user_id = Column(UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
     file_data = Column(LargeBinary, nullable=False)  # Audio stored in database
     duration_seconds = Column(Integer, nullable=True)

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 class DepartmentBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    code: str = Field(..., min_length=1, max_length=50)
+    code: Optional[str] = Field(None, max_length=50)
     description: Optional[str] = None
 
 
@@ -114,6 +114,13 @@ class UserCreate(UserBase):
     department_id: Optional[str] = None
     location_id: Optional[str] = None
     specialization_id: Optional[str] = None
+
+
+class RegisterUserRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    email: EmailStr
+    phone: Optional[str] = Field(None, max_length=20)
+    password: str = Field(..., min_length=1)
 
 
 class UserUpdate(BaseModel):
