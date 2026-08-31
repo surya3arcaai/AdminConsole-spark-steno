@@ -10,6 +10,7 @@ from shared.schemas import HealthResponse
 
 from .config import settings
 from .routers import monitoring_router, integration_router, transcripts_router, exports_router, graphs_router
+from . import models
 
 
 @asynccontextmanager

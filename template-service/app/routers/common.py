@@ -83,3 +83,32 @@ async def import_template(
         created_by=current_user.user_id,
     )
     return template
+
+
+from pydantic import BaseModel
+
+class UserTemplateAssignRequest(BaseModel):
+    template_ids: List[str]
+
+
+@router.post("/user/{user_id}/assign")
+async def assign_user_templates(
+    user_id: str,
+    data: UserTemplateAssignRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    """Assign template IDs to a user."""
+    assignments = await crud.assign_user_templates(db, user_id, data.template_ids)
+    return {"success": True, "count": len(assignments)}
+
+
+@router.get("/user/{user_id}", response_model=List[TemplateSummaryResponse])
+async def get_user_templates(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    """Get assigned templates for a user."""
+    templates = await crud.get_user_templates(db, user_id)
+    return templates

@@ -12,6 +12,7 @@ from shared.schemas import HealthResponse
 
 from .config import settings
 from .routers import roles_router, permissions_router
+from . import models
 
 
 @asynccontextmanager

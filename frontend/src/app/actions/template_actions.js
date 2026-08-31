@@ -49,3 +49,16 @@ export async function deleteTemplateAction(type, id) {
     revalidatePath('/templates');
     return res;
 }
+
+export async function assignUserTemplatesAction(userId, templateIds) {
+    const res = await fetchApi(8003, `/user/${userId}/assign`, {
+        method: 'POST',
+        body: JSON.stringify({ template_ids: templateIds })
+    });
+    revalidatePath('/users');
+    return res;
+}
+
+export async function getUserTemplatesAction(userId) {
+    return await fetchApi(8003, `/user/${userId}`);
+}

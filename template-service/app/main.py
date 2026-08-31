@@ -6,18 +6,22 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from shared.database import init_db, close_db
+from shared.database import init_db, close_db, AsyncSessionLocal
 from shared.middleware import LoggingMiddleware, ErrorHandlingMiddleware
 from shared.schemas import HealthResponse
 
 from .config import settings
 from .routers import clinical_router, discharge_router, common_router
+from . import models
+from .crud import seed_default_templates
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     await init_db()
+    async with AsyncSessionLocal() as session:
+        await seed_default_templates(session)
     yield
     await close_db()
 

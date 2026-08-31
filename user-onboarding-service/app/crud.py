@@ -4,7 +4,7 @@ CRUD operations for User Onboarding Service.
 
 from typing import List, Optional, Tuple
 from datetime import datetime
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -393,10 +393,50 @@ async def update_user_demographics(db: AsyncSession, user_id: str, data: UserDem
 
 
 async def delete_user(db: AsyncSession, user_id: str) -> None:
+    logger.info(f"🗑️ Deleting user '{user_id}' and all associated records from PostgreSQL and Keycloak...")
     user = await get_user(db, user_id)
+
+    # Fetch existing table names in public schema to avoid transaction abort errors
+    tables_res = await db.execute(
+        text("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
+    )
+    existing_tables = set(r[0] for r in tables_res.fetchall())
+
+    potential_child_tables = [
+        "meetings",
+        "user_roles",
+        "registrations",
+        "supervisor_assignments",
+        "audio_samples",
+        "user_templates",
+        "user_clinical_templates",
+        "user_discharge_templates",
+        "audios",
+        "transcripts",
+        "audio_recordings"
+    ]
+
+    for table_name in potential_child_tables:
+        if table_name in existing_tables:
+            try:
+                if table_name == "supervisor_assignments":
+                    await db.execute(
+                        text("DELETE FROM supervisor_assignments WHERE user_id = :uid OR supervisor_id = :uid"),
+                        {"uid": user_id}
+                    )
+                else:
+                    await db.execute(
+                        text(f"DELETE FROM {table_name} WHERE user_id = :uid"),
+                        {"uid": user_id}
+                    )
+                logger.info(f"Cleaned child records from table '{table_name}' for user '{user_id}'")
+            except Exception as e:
+                logger.warning(f"Warning cleaning child table '{table_name}': {e}")
+
     await db.delete(user)
     await db.flush()
     await delete_user_from_keycloak(user_id)
+    logger.info(f"✅ User '{user_id}' and all associated data successfully deleted from DB and Keycloak.")
 
 
 async def assign_eid_to_user(db: AsyncSession, user_id: str, eid: Optional[str] = None) -> User:

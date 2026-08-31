@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Database
-    database_url: str = "postgresql+asyncpg://arca_admin:arca_secret_2026@localhost:5432/arca_spark_db"
+    database_url: str = "postgresql+asyncpg://postgres:Password%40123@192.168.112.6:31155/arca-spark"
 
     # JWT
     jwt_secret_key: str = "your-super-secret-jwt-key-change-in-production"

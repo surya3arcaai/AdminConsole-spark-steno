@@ -12,7 +12,7 @@ from sqlalchemy.orm import declarative_base
 # Database URL from environment
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://arca_admin:arca_secret_2026@localhost:5432/arca_spark_db"
+    "postgresql+asyncpg://postgres:Password%40123@192.168.112.6:31155/arca-spark"
 )
 
 # Create async engine with appropriate settings based on database type

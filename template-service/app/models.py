@@ -25,15 +25,20 @@ def generate_uuid():
     return str(uuid.uuid4())
 
 
-class TemplateType(enum.Enum):
-    CLINICAL = "clinical"
-    DISCHARGE = "discharge"
+class TemplateType(str, enum.Enum):
+    CLINICAL = "CLINICAL"
+    DISCHARGE = "DISCHARGE"
+    clinical = "CLINICAL"
+    discharge = "DISCHARGE"
 
 
-class TemplateStatus(enum.Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    ARCHIVED = "archived"
+class TemplateStatus(str, enum.Enum):
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    ARCHIVED = "ARCHIVED"
+    draft = "DRAFT"
+    active = "ACTIVE"
+    archived = "ARCHIVED"
 
 
 class Template(Base):
@@ -42,13 +47,13 @@ class Template(Base):
     __tablename__ = "templates"
 
     id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
-    type = Column(SQLEnum(TemplateType), nullable=False, index=True)
+    type = Column(SQLEnum(TemplateType, name="templatetype", create_type=False, values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
     name = Column(String(200), nullable=False, index=True)
     description = Column(Text, nullable=True)
     content = Column(Text, nullable=False)  # Jinja2 template content
     variables_schema = Column(JSON, default=dict)  # Schema for template variables
     version = Column(Integer, default=1, nullable=False)
-    status = Column(SQLEnum(TemplateStatus), default=TemplateStatus.DRAFT, nullable=False)
+    status = Column(SQLEnum(TemplateStatus, name="templatestatus", create_type=False, values_callable=lambda x: [e.value for e in x]), default=TemplateStatus.DRAFT, nullable=False)
     created_by = Column(String(100), nullable=True)  # External user ID
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -72,3 +77,16 @@ class TemplateVersion(Base):
 
     # Relationships
     template = relationship("Template", back_populates="versions")
+
+
+class UserTemplate(Base):
+    """User template assignment model."""
+
+    __tablename__ = "user_templates"
+
+    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    user_id = Column(UUID(as_uuid=False), nullable=False, index=True)
+    template_id = Column(UUID(as_uuid=False), ForeignKey("templates.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    template = relationship("Template")

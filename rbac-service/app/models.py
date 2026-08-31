@@ -28,8 +28,8 @@ def generate_uuid():
 role_permissions = Table(
     "role_permissions",
     Base.metadata,
-    Column("role_id", UUID(as_uuid=False), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
-    Column("permission_id", UUID(as_uuid=False), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", String(255), ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", String(255), ForeignKey("permissions.id", ondelete="CASCADE"), primary_key=True),
 )
 
 
@@ -38,7 +38,7 @@ class Role(Base):
 
     __tablename__ = "roles"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
     name = Column(String(100), unique=True, nullable=False, index=True)
     description = Column(Text, nullable=True)
     is_system = Column(Boolean, default=False, nullable=False)  # System roles cannot be deleted
@@ -63,7 +63,7 @@ class Permission(Base):
 
     __tablename__ = "permissions"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
     name = Column(String(100), unique=True, nullable=False, index=True)
     module = Column(String(100), nullable=False, index=True)  # e.g., 'users', 'templates', 'logs'
     action = Column(String(50), nullable=False)  # e.g., 'create', 'read', 'update', 'delete'
@@ -91,9 +91,9 @@ class UserRole(Base):
 
     __tablename__ = "user_roles"
 
-    id = Column(UUID(as_uuid=False), primary_key=True, default=generate_uuid)
+    id = Column(String(255), primary_key=True, default=generate_uuid)
     user_id = Column(String(100), nullable=False, index=True)  # External user ID from user-onboarding-service
-    role_id = Column(UUID(as_uuid=False), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
+    role_id = Column(String(255), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
     assigned_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     assigned_by = Column(String(100), nullable=True)  # External user ID who assigned this role
 

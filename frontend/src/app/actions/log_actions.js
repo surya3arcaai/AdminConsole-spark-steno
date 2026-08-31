@@ -1,28 +1,71 @@
 "use server";
-import { DefaultAzureCredential } from "@azure/identity";
-import { ContainerInstanceManagementClient } from "@azure/arm-containerinstance";
 
-export async function fetchContainerLogsAction(containerGroupName) {
+const SPARK_BACKEND_URL = process.env.SPARK_BACKEND_URL || "https://78c9-103-64-129-250.ngrok-free.app/spark-backend";
+const EMBEDDING_API_KEY = process.env.EMBEDDING_API_KEY || "n1i2t3i4k5d6i7a8s";
+
+export async function fetchContainerLogsAction(containerGroupName, logType = "service", levelFilter = "", fetchFullFile = false) {
     try {
-        const subscriptionId = process.env.AZURE_SUBSCRIPTION_ID;
-        const resourceGroupName = "emr-lite";
+        const lineCount = fetchFullFile ? "10000" : "300";
+        const svcLower = (containerGroupName || "").toLowerCase();
 
-        if (!subscriptionId) {
-            return `Configuration Error: The dashboard Server lacks an Azure Subscription ID.\n\nPlease add the following to your .env:\nAZURE_SUBSCRIPTION_ID="your_subscription_id_here"\n(And ensure you have run 'az login' locally to authenticate)`;
+        let url;
+        if (svcLower.includes("diariz")) {
+            url = `${SPARK_BACKEND_URL}/logs/diarize?lines=${lineCount}`;
+        } else if (svcLower.includes("embed")) {
+            url = `${SPARK_BACKEND_URL}/logs/embedding?lines=${lineCount}`;
+        } else if (svcLower.includes("whisper")) {
+            url = `${SPARK_BACKEND_URL}/logs/whisper?lines=${lineCount}`;
+        } else {
+            url = `${SPARK_BACKEND_URL}/logs?type=${logType}&service=${encodeURIComponent(containerGroupName)}&lines=${lineCount}`;
         }
 
-        // DefaultAzureCredential automatically falls back to your local 'az login' CLI session 
-        // if AZURE_CLIENT_ID and AZURE_CLIENT_SECRET are not provided!
-        const credential = new DefaultAzureCredential();
-        const client = new ContainerInstanceManagementClient(credential, subscriptionId);
+        if (levelFilter) {
+            url += `&level=${encodeURIComponent(levelFilter)}`;
+        }
 
-        // Fetch the full historical logs using the Azure REST API headlessly.
-        // Note: The container name inside an Azure Container Group usually defaults to the Group Name if deployed simply.
-        const response = await client.containers.listLogs(resourceGroupName, containerGroupName, containerGroupName);
+        const res = await fetch(url, {
+            method: "GET",
+            headers: {
+                "X-API-Key": EMBEDDING_API_KEY,
+                "ngrok-skip-browser-warning": "true",
+                "Content-Type": "application/json"
+            },
+            cache: "no-store",
+            signal: AbortSignal.timeout(12000)
+        });
 
-        return response.content || "No log output available yet.";
+        if (!res.ok) {
+            const errText = await res.text().catch(() => "");
+            return `[Backend Status ${res.status}] ${errText || "Unable to fetch logs from Spark Backend (" + url + ")"}`;
+        }
+
+        const text = await res.text();
+        try {
+            const data = JSON.parse(text);
+            if (data.success && Array.isArray(data.logs)) {
+                return data.logs.join("\n");
+            }
+            if (Array.isArray(data.logs)) {
+                return data.logs.join("\n");
+            }
+            if (data.logs && typeof data.logs === "string") {
+                return data.logs;
+            }
+            if (Array.isArray(data.lines)) {
+                return data.lines.join("\n");
+            }
+            if (data.content) {
+                return data.content;
+            }
+            if (Array.isArray(data)) {
+                return data.join("\n");
+            }
+            return JSON.stringify(data, null, 2);
+        } catch {
+            return text;
+        }
     } catch (error) {
-        // Return structured, clean UI messages rather than leaking raw Node errors if auth fails.
-        return `Failed to securely fetch Azure logs using Service Principal Object API.\nTarget: ${containerGroupName}\n\nError Details:\n${error.message}`;
+        return `Connection Info: Calling Spark Backend at ${SPARK_BACKEND_URL}\nTarget Service: ${containerGroupName}\nStatus Notice: ${error.message}`;
     }
 }
+

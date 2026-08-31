@@ -120,18 +120,22 @@ class User(Base):
     department = relationship("Department", back_populates="users")
     location = relationship("Location", back_populates="users")
     specialization = relationship("Specialization", back_populates="users")
-    registration = relationship("Registration", back_populates="user", uselist=False)
-    audio_samples = relationship("AudioSample", back_populates="user", cascade="all, delete-orphan")
+    registration = relationship("Registration", back_populates="user", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
+    audio_samples = relationship("AudioSample", back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
     supervisor_assignment = relationship(
         "SupervisorAssignment",
         back_populates="user",
         foreign_keys="SupervisorAssignment.user_id",
         uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     reportees = relationship(
         "SupervisorAssignment",
         back_populates="supervisor",
         foreign_keys="SupervisorAssignment.supervisor_id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 

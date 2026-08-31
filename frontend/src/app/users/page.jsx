@@ -13,9 +13,13 @@ export default async function UsersPage() {
 
     const clinicalRes = await fetchApi(8003, "/clinical/") || [];
     const dischargeRes = await fetchApi(8003, "/discharge/") || [];
+
+    const clinicalList = Array.isArray(clinicalRes) ? clinicalRes : (clinicalRes?.items || []);
+    const dischargeList = Array.isArray(dischargeRes) ? dischargeRes : (dischargeRes?.items || []);
+
     const templates = {
-        clinical: clinicalRes.items || clinicalRes || [],
-        discharge: dischargeRes.items || dischargeRes || []
+        clinical: clinicalList,
+        discharge: dischargeList
     };
 
     return (
