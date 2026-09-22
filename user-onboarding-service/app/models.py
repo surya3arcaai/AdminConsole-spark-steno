@@ -53,10 +53,10 @@ class Department(Base):
     users = relationship("User", back_populates="department")
 
 
-class Location(Base):
-    """Location model."""
+class Hospital(Base):
+    """Hospital model."""
 
-    __tablename__ = "locations"
+    __tablename__ = "hospitals"
 
     id = Column(String(255), primary_key=True, default=generate_uuid)
     name = Column(String(200), unique=True, nullable=False, index=True)
@@ -65,7 +65,11 @@ class Location(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
-    users = relationship("User", back_populates="location")
+    users = relationship("User", back_populates="hospital")
+
+
+# Backward compatibility alias
+Location = Hospital
 
 
 class Specialization(Base):
@@ -109,7 +113,7 @@ class User(Base):
 
     # Demographics
     department_id = Column(String(255), ForeignKey("departments.id"), nullable=True)
-    location_id = Column(String(255), ForeignKey("locations.id"), nullable=True)
+    hospital_id = Column(String(255), ForeignKey("hospitals.id"), nullable=True)
     specialization_id = Column(String(255), ForeignKey("specializations.id"), nullable=True)
 
     # Timestamps
@@ -118,8 +122,20 @@ class User(Base):
 
     # Relationships
     department = relationship("Department", back_populates="users")
-    location = relationship("Location", back_populates="users")
+    hospital = relationship("Hospital", back_populates="users")
     specialization = relationship("Specialization", back_populates="users")
+
+    @property
+    def location_id(self):
+        return self.hospital_id
+
+    @location_id.setter
+    def location_id(self, val):
+        self.hospital_id = val
+
+    @property
+    def location(self):
+        return self.hospital
     registration = relationship("Registration", back_populates="user", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
     audio_samples = relationship("AudioSample", back_populates="user", cascade="all, delete-orphan", passive_deletes=True)
     supervisor_assignment = relationship(

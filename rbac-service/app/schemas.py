@@ -129,6 +129,14 @@ class RolePermissionUpdate(BaseModel):
 
 # ============== System Role Schemas (Doctor, Admin, Supervisor) ==============
 
+class UserRoleCreate(BaseModel):
+    """Schema for creating user role with predefined permissions."""
+    description: Optional[str] = Field(
+        default="Standard Clinical Practitioner / User role",
+        description="Role description"
+    )
+
+
 class DoctorRoleCreate(BaseModel):
     """Schema for creating doctor role with predefined permissions."""
     description: Optional[str] = Field(

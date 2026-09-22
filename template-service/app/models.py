@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     Enum as SQLEnum,
     JSON,
+    Boolean,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -54,6 +55,8 @@ class Template(Base):
     variables_schema = Column(JSON, default=dict)  # Schema for template variables
     version = Column(Integer, default=1, nullable=False)
     status = Column(SQLEnum(TemplateStatus, name="templatestatus", create_type=False, values_callable=lambda x: [e.value for e in x]), default=TemplateStatus.DRAFT, nullable=False)
+    location_id = Column(String(255), ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True)
+    is_default = Column(Boolean, default=False, nullable=False, index=True)
     created_by = Column(String(100), nullable=True)  # External user ID
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

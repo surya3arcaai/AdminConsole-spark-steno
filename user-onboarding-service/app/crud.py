@@ -9,12 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from .models import (
-    User, UserStatus, Department, Location, Specialization,
+    User, UserStatus, Department, Hospital, Location, Specialization,
     EIDConfig, Registration, SupervisorAssignment, AudioSample
 )
 from .schemas import (
     UserCreate, UserUpdate, UserDemographicsUpdate,
-    DepartmentCreate, LocationCreate, SpecializationCreate,
+    DepartmentCreate, HospitalCreate, LocationCreate, SpecializationCreate,
     RegistrationCreate, RegistrationUpdate, EIDConfigUpdate,
 )
 import logging
@@ -57,28 +57,33 @@ async def get_departments(db: AsyncSession) -> List[Department]:
     return list(result.scalars().all())
 
 
-# ============== Location CRUD ==============
+# ============== Hospital CRUD ==============
 
-async def create_location(db: AsyncSession, data: LocationCreate) -> Location:
+async def create_hospital(db: AsyncSession, data: HospitalCreate) -> Hospital:
     from fastapi import HTTPException
-    existing = await db.execute(select(Location).where(Location.name == data.name))
+    existing = await db.execute(select(Hospital).where(Hospital.name == data.name))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail=f"Location '{data.name}' already exists.")
+        raise HTTPException(status_code=409, detail=f"Hospital '{data.name}' already exists.")
 
     try:
-        loc = Location(**data.model_dump())
-        db.add(loc)
+        hosp = Hospital(**data.model_dump())
+        db.add(hosp)
         await db.flush()
-        await db.refresh(loc)
-        return loc
+        await db.refresh(hosp)
+        return hosp
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=400, detail=f"Database error creating location: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Database error creating hospital: {str(e)}")
 
 
-async def get_locations(db: AsyncSession) -> List[Location]:
-    result = await db.execute(select(Location).order_by(Location.name))
+async def get_hospitals(db: AsyncSession) -> List[Hospital]:
+    result = await db.execute(select(Hospital).order_by(Hospital.name))
     return list(result.scalars().all())
+
+
+# Backward compatibility aliases
+create_location = create_hospital
+get_locations = get_hospitals
 
 
 # ============== Specialization CRUD ==============
@@ -194,7 +199,16 @@ async def delete_user_from_keycloak(keycloak_user_id: str) -> bool:
     return False
 
 
-async def create_user_with_keycloak(db: AsyncSession, name: str, email: str, phone: str, password: str) -> User:
+async def create_user_with_keycloak(
+    db: AsyncSession,
+    name: str,
+    email: str,
+    phone: str,
+    password: str,
+    department_id: Optional[str] = None,
+    hospital_id: Optional[str] = None,
+    specialization_id: Optional[str] = None
+) -> User:
     import uuid
     import httpx
     from .config import settings
@@ -291,7 +305,10 @@ async def create_user_with_keycloak(db: AsyncSession, name: str, email: str, pho
             name=name,
             email=email,
             phone=phone,
-            status=UserStatus.PENDING.value
+            status=UserStatus.PENDING.value,
+            department_id=department_id,
+            hospital_id=hospital_id,
+            specialization_id=specialization_id
         )
         db.add(user)
         await db.flush()
@@ -303,7 +320,7 @@ async def create_user_with_keycloak(db: AsyncSession, name: str, email: str, pho
         if created_in_keycloak:
             logger.error(f"❌ PostgreSQL database insert failed for '{email}': {e}. Cleaning up Keycloak user '{keycloak_user_id}'...")
             await delete_user_from_keycloak(keycloak_user_id)
-        raise e
+        raise
 
 
 async def get_user(db: AsyncSession, user_id: str) -> User:
@@ -311,7 +328,7 @@ async def get_user(db: AsyncSession, user_id: str) -> User:
         select(User)
         .options(
             selectinload(User.department),
-            selectinload(User.location),
+            selectinload(User.hospital),
             selectinload(User.specialization),
         )
         .where(User.id == user_id)
@@ -328,6 +345,7 @@ async def get_users(
     limit: int = 100,
     query: Optional[str] = None,
     department_id: Optional[str] = None,
+    hospital_id: Optional[str] = None,
     location_id: Optional[str] = None,
     specialization_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -346,9 +364,10 @@ async def get_users(
         base_query = base_query.where(User.department_id == department_id)
         count_query = count_query.where(User.department_id == department_id)
 
-    if location_id:
-        base_query = base_query.where(User.location_id == location_id)
-        count_query = count_query.where(User.location_id == location_id)
+    target_hosp = hospital_id or location_id
+    if target_hosp:
+        base_query = base_query.where(User.hospital_id == target_hosp)
+        count_query = count_query.where(User.hospital_id == target_hosp)
 
     if specialization_id:
         base_query = base_query.where(User.specialization_id == specialization_id)
@@ -385,7 +404,14 @@ async def update_user(db: AsyncSession, user_id: str, data: UserUpdate) -> User:
 async def update_user_demographics(db: AsyncSession, user_id: str, data: UserDemographicsUpdate) -> User:
     user = await get_user(db, user_id)
     update_data = data.model_dump(exclude_unset=True)
+    if "hospital_id" in update_data and update_data["hospital_id"]:
+        user.hospital_id = update_data["hospital_id"]
+    elif "location_id" in update_data:
+        user.hospital_id = update_data["location_id"]
+
     for field, value in update_data.items():
+        if field in ("hospital_id", "location_id"):
+            continue
         setattr(user, field, value)
     await db.flush()
     await db.refresh(user)
@@ -522,15 +548,18 @@ async def assign_supervisor(
         raise ValidationException("User cannot be their own supervisor")
 
     existing = await db.execute(select(SupervisorAssignment).where(SupervisorAssignment.user_id == user_id))
-    if existing.scalar_one_or_none():
-        raise ConflictException(message="User already has a supervisor assigned")
-
-    assignment = SupervisorAssignment(
-        user_id=user_id,
-        supervisor_id=supervisor_id,
-        assigned_by=assigned_by,
-    )
-    db.add(assignment)
+    assignment = existing.scalar_one_or_none()
+    if assignment:
+        assignment.supervisor_id = supervisor_id
+        assignment.assigned_at = datetime.utcnow()
+        assignment.assigned_by = assigned_by
+    else:
+        assignment = SupervisorAssignment(
+            user_id=user_id,
+            supervisor_id=supervisor_id,
+            assigned_by=assigned_by,
+        )
+        db.add(assignment)
     await db.flush()
     await db.refresh(assignment)
     return assignment
@@ -554,18 +583,7 @@ async def change_supervisor(
     supervisor_id: str,
     assigned_by: Optional[str] = None
 ) -> SupervisorAssignment:
-    assignment = await get_supervisor(db, user_id)
-    await get_user(db, supervisor_id)
-
-    if user_id == supervisor_id:
-        raise ValidationException("User cannot be their own supervisor")
-
-    assignment.supervisor_id = supervisor_id
-    assignment.assigned_at = datetime.utcnow()
-    assignment.assigned_by = assigned_by
-    await db.flush()
-    await db.refresh(assignment)
-    return assignment
+    return await assign_supervisor(db, user_id, supervisor_id, assigned_by)
 
 
 async def remove_supervisor(db: AsyncSession, user_id: str) -> None:

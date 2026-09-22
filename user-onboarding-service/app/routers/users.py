@@ -36,7 +36,10 @@ async def register_user(
         name=data.name,
         email=data.email,
         phone=data.phone,
-        password=data.password
+        password=data.password,
+        department_id=data.department_id,
+        hospital_id=data.hospital_id or data.location_id,
+        specialization_id=data.specialization_id
     )
     return user
 
@@ -69,6 +72,7 @@ async def list_users(
 async def search_users(
     query: Optional[str] = Query(None, description="Search by name, email, or EID"),
     department_id: Optional[str] = None,
+    hospital_id: Optional[str] = None,
     location_id: Optional[str] = None,
     specialization_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -85,7 +89,7 @@ async def search_users(
         limit=page_size,
         query=query,
         department_id=department_id,
-        location_id=location_id,
+        location_id=hospital_id or location_id,
         specialization_id=specialization_id,
         status=status,
     )

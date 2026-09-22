@@ -21,6 +21,7 @@ from ..schemas import (
     RolePermissionUpdate,
     AccessValidationRequest,
     AccessValidationResponse,
+    UserRoleCreate,
     DoctorRoleCreate,
     AdminRoleCreate,
     SupervisorRoleCreate,
@@ -127,19 +128,22 @@ async def update_role_permissions(
     return role
 
 
-# ============== Doctor Role ==============
+# ============== User Role ==============
 
-@router.post("/roles/doctor", response_model=RoleResponse, status_code=201)
-async def create_doctor_role(
-    data: DoctorRoleCreate,
+@router.post("/roles/user", response_model=RoleResponse, status_code=201)
+async def create_user_role(
+    data: UserRoleCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserContext = Depends(get_current_user),
 ):
     """
-    Create the Doctor system role with medical permissions.
+    Create the User system role.
     """
+    role = await crud.get_role_by_name(db, "user")
+    if role:
+        return role
     role_data = RoleCreate(
-        name="doctor",
+        name="User",
         description=data.description,
         permission_ids=[],
     )
@@ -147,18 +151,88 @@ async def create_doctor_role(
     return role
 
 
+@router.get("/roles/user/permissions", response_model=List[str])
+async def get_user_permissions(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    """
+    Get permissions assigned to the User role.
+    """
+    role = await crud.get_role_by_name(db, "user")
+    if not role:
+        return []
+    return [p.name for p in role.permissions]
+
+
+@router.post("/users/{user_id}/roles/user", response_model=SuccessResponse, status_code=201)
+async def assign_user_role(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    """
+    Assign the User role to a user.
+    """
+    role = await crud.get_role_by_name(db, "user")
+    if not role:
+        role_data = RoleCreate(name="User", description="Standard Clinical Practitioner / User")
+        role = await crud.create_role(db, role_data, is_system=True)
+
+    await crud.assign_role_to_user(db, user_id, role.id, current_user.user_id)
+    return SuccessResponse(message=f"User role assigned to user {user_id}")
+
+
+@router.delete("/users/{user_id}/roles/user", status_code=204)
+async def revoke_user_role(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    """
+    Remove the User role from a user.
+    """
+    role = await crud.get_role_by_name(db, "user")
+    if role:
+        await crud.revoke_role_from_user(db, user_id, role.id)
+
+
+@router.get("/roles/user/users", response_model=PaginatedResponse[str])
+async def list_users_with_user_role(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    """
+    List all users with the User role.
+    """
+    role = await crud.get_role_by_name(db, "user")
+    if not role:
+        return PaginatedResponse.create(items=[], total=0, page=page, page_size=page_size)
+
+    skip = (page - 1) * page_size
+    user_ids, total = await crud.get_users_by_role(db, role.id, skip=skip, limit=page_size)
+    return PaginatedResponse.create(items=user_ids, total=total, page=page, page_size=page_size)
+
+
+# ============== Doctor Role (Legacy Alias) ==============
+
+@router.post("/roles/doctor", response_model=RoleResponse, status_code=201)
+async def create_doctor_role(
+    data: DoctorRoleCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    return await create_user_role(UserRoleCreate(description=data.description), db, current_user)
+
+
 @router.get("/roles/doctor/permissions", response_model=List[str])
 async def get_doctor_permissions(
     db: AsyncSession = Depends(get_db),
     current_user: UserContext = Depends(get_current_user),
 ):
-    """
-    Get permissions assigned to the Doctor role.
-    """
-    role = await crud.get_role_by_name(db, "doctor")
-    if not role:
-        return []
-    return [p.name for p in role.permissions]
+    return await get_user_permissions(db, current_user)
 
 
 @router.post("/users/{user_id}/roles/doctor", response_model=SuccessResponse, status_code=201)
@@ -167,16 +241,7 @@ async def assign_doctor_role(
     db: AsyncSession = Depends(get_db),
     current_user: UserContext = Depends(get_current_user),
 ):
-    """
-    Assign the Doctor role to a user.
-    """
-    role = await crud.get_role_by_name(db, "doctor")
-    if not role:
-        role_data = RoleCreate(name="doctor", description="Doctor role with medical permissions")
-        role = await crud.create_role(db, role_data, is_system=True)
-
-    await crud.assign_role_to_user(db, user_id, role.id, current_user.user_id)
-    return SuccessResponse(message=f"Doctor role assigned to user {user_id}")
+    return await assign_user_role(user_id, db, current_user)
 
 
 @router.delete("/users/{user_id}/roles/doctor", status_code=204)
@@ -185,12 +250,7 @@ async def revoke_doctor_role(
     db: AsyncSession = Depends(get_db),
     current_user: UserContext = Depends(get_current_user),
 ):
-    """
-    Remove the Doctor role from a user.
-    """
-    role = await crud.get_role_by_name(db, "doctor")
-    if role:
-        await crud.revoke_role_from_user(db, user_id, role.id)
+    return await revoke_user_role(user_id, db, current_user)
 
 
 @router.get("/roles/doctor/users", response_model=PaginatedResponse[str])
@@ -200,16 +260,8 @@ async def list_doctors(
     db: AsyncSession = Depends(get_db),
     current_user: UserContext = Depends(get_current_user),
 ):
-    """
-    List all users with the Doctor role.
-    """
-    role = await crud.get_role_by_name(db, "doctor")
-    if not role:
-        return PaginatedResponse.create(items=[], total=0, page=page, page_size=page_size)
+    return await list_users_with_user_role(page, page_size, db, current_user)
 
-    skip = (page - 1) * page_size
-    user_ids, total = await crud.get_users_by_role(db, role.id, skip=skip, limit=page_size)
-    return PaginatedResponse.create(items=user_ids, total=total, page=page, page_size=page_size)
 
 
 # ============== Admin Role ==============
@@ -398,6 +450,38 @@ async def get_user_roles(
         user_id=user_id,
         roles=[RoleSummaryResponse.model_validate(r) for r in roles],
     )
+
+
+@router.post("/users/{user_id}/roles/{role_name}", response_model=SuccessResponse, status_code=201)
+async def assign_role_by_name(
+    user_id: str,
+    role_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    """
+    Assign a role by name to a user (case-insensitive).
+    """
+    role = await crud.get_role_by_name(db, role_name)
+    if not role:
+        raise NotFoundException("Role", role_name)
+    await crud.assign_role_to_user(db, user_id, role.id, current_user.user_id)
+    return SuccessResponse(message=f"Role '{role.name}' assigned to user {user_id}")
+
+
+@router.delete("/users/{user_id}/roles/{role_name}", status_code=204)
+async def revoke_role_by_name(
+    user_id: str,
+    role_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
+):
+    """
+    Remove a role by name from a user.
+    """
+    role = await crud.get_role_by_name(db, role_name)
+    if role:
+        await crud.revoke_role_from_user(db, user_id, role.id)
 
 
 # ============== Access Validation ==============

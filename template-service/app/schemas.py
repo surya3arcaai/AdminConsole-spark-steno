@@ -14,6 +14,8 @@ class TemplateBase(BaseModel):
     description: Optional[str] = None
     content: str = Field(..., min_length=1)
     variables_schema: Dict[str, Any] = Field(default_factory=dict)
+    location_id: Optional[str] = None
+    is_default: Optional[bool] = False
 
 
 class TemplateCreate(TemplateBase):
@@ -26,6 +28,8 @@ class TemplateUpdate(BaseModel):
     content: Optional[str] = None
     variables_schema: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
+    location_id: Optional[str] = None
+    is_default: Optional[bool] = None
 
 
 class TemplateResponse(TemplateBase):
@@ -33,6 +37,8 @@ class TemplateResponse(TemplateBase):
     type: str
     version: int
     status: str
+    location_id: Optional[str] = None
+    is_default: bool = False
     created_by: Optional[str]
     created_at: datetime
     updated_at: datetime
@@ -48,6 +54,8 @@ class TemplateSummaryResponse(BaseModel):
     content: str
     version: int
     status: str
+    location_id: Optional[str] = None
+    is_default: bool = False
     created_at: datetime
     updated_at: datetime
 

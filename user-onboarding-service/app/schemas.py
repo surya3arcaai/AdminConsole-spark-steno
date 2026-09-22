@@ -26,23 +26,29 @@ class DepartmentResponse(DepartmentBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ============== Location Schemas ==============
+# ============== Hospital Schemas ==============
 
-class LocationBase(BaseModel):
+class HospitalBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     address: Optional[str] = None
     city: Optional[str] = Field(None, max_length=100)
 
 
-class LocationCreate(LocationBase):
+class HospitalCreate(HospitalBase):
     pass
 
 
-class LocationResponse(LocationBase):
+class HospitalResponse(HospitalBase):
     id: str
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# Backward compatibility aliases
+LocationBase = HospitalBase
+LocationCreate = HospitalCreate
+LocationResponse = HospitalResponse
 
 
 # ============== Specialization Schemas ==============
@@ -67,6 +73,7 @@ class SpecializationResponse(SpecializationBase):
 
 class DemographicsResponse(BaseModel):
     departments: List[DepartmentResponse]
+    hospitals: Optional[List[HospitalResponse]] = None
     locations: List[LocationResponse]
     specializations: List[SpecializationResponse]
 
@@ -112,6 +119,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     department_id: Optional[str] = None
+    hospital_id: Optional[str] = None
     location_id: Optional[str] = None
     specialization_id: Optional[str] = None
 
@@ -121,6 +129,10 @@ class RegisterUserRequest(BaseModel):
     email: EmailStr
     phone: Optional[str] = Field(None, max_length=20)
     password: str = Field(..., min_length=1)
+    department_id: Optional[str] = None
+    hospital_id: Optional[str] = None
+    location_id: Optional[str] = None
+    specialization_id: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -132,17 +144,19 @@ class UserUpdate(BaseModel):
 
 class UserDemographicsUpdate(BaseModel):
     department_id: Optional[str] = None
+    hospital_id: Optional[str] = None
     location_id: Optional[str] = None
     specialization_id: Optional[str] = None
 
 
 class UserResponse(UserBase):
     id: str
-    eid: Optional[str]
+    eid: Optional[str] = None
     status: str
-    department_id: Optional[str]
-    location_id: Optional[str]
-    specialization_id: Optional[str]
+    department_id: Optional[str] = None
+    hospital_id: Optional[str] = None
+    location_id: Optional[str] = None
+    specialization_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -150,9 +164,10 @@ class UserResponse(UserBase):
 
 
 class UserDetailResponse(UserResponse):
-    department: Optional[DepartmentResponse]
-    location: Optional[LocationResponse]
-    specialization: Optional[SpecializationResponse]
+    department: Optional[DepartmentResponse] = None
+    hospital: Optional[HospitalResponse] = None
+    location: Optional[LocationResponse] = None
+    specialization: Optional[SpecializationResponse] = None
 
 
 # ============== Registration Schemas ==============

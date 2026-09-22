@@ -147,13 +147,42 @@ async def get_role(db: AsyncSession, role_id: str) -> Role:
 
 
 async def get_role_by_name(db: AsyncSession, name: str) -> Optional[Role]:
-    """Get a role by name."""
+    """Get a role by name (case-insensitive with ID fallback)."""
+    search_name = (name or "").strip()
+    if not search_name:
+        return None
+
+    canonical_id = f"role_{search_name.lower()}"
+    # 1. First check canonical system ID (e.g. role_user, role_admin, role_supervisor)
+    res_id = await db.execute(
+        select(Role)
+        .options(selectinload(Role.permissions))
+        .where(Role.id == canonical_id)
+    )
+    role = res_id.scalars().first()
+    if role:
+        return role
+
+    # 2. Case-insensitive search by name without crashing on duplicates
     result = await db.execute(
         select(Role)
         .options(selectinload(Role.permissions))
-        .where(Role.name == name)
+        .where(func.lower(Role.name) == search_name.lower())
     )
-    return result.scalar_one_or_none()
+    roles = result.scalars().all()
+    if roles:
+        # Prefer system role or role with permissions or first one
+        for r in roles:
+            if r.id == canonical_id:
+                return r
+        for r in roles:
+            if r.permissions:
+                return r
+        return roles[0]
+
+    if search_name.lower() == "doctor":
+        return await get_role_by_name(db, "user")
+    return None
 
 
 async def get_roles(
@@ -235,19 +264,12 @@ async def assign_role_to_user(
     role_id: str,
     assigned_by: Optional[str] = None,
 ) -> UserRole:
-    """Assign a role to a user."""
+    """Assign a role to a user, replacing prior roles."""
     # Verify role exists
     role = await get_role(db, role_id)
 
-    # Check if assignment already exists
-    existing = await db.execute(
-        select(UserRole).where(
-            UserRole.user_id == user_id,
-            UserRole.role_id == role_id
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise ConflictException(message=f"User already has role '{role.name}'")
+    # Remove any existing role assignments for this user
+    await db.execute(delete(UserRole).where(UserRole.user_id == user_id))
 
     user_role = UserRole(
         user_id=user_id,

@@ -15,8 +15,11 @@ export async function getUserRolesAction(userId) {
 }
 
 export async function assignRoleAction(userId, roleName) {
-    // roleName is 'doctor', 'admin', or 'supervisor'
-    const res = await fetchApi(PORT, `/users/${userId}/roles/${roleName}`, {
+    // roleName can be 'user', 'admin', or 'supervisor'
+    const targetRole = (roleName || '').toLowerCase();
+    const cleanRole = targetRole === 'doctor' ? 'user' : targetRole;
+    
+    const res = await fetchApi(PORT, `/users/${userId}/roles/${cleanRole}`, {
         method: 'POST'
     });
     revalidatePath('/users');
@@ -57,9 +60,23 @@ export async function deleteRoleAction(id) {
     return res;
 }
 
+export async function fetchPermissionsAction() {
+    const res = await fetchApi(PORT, '/permissions?page_size=100');
+    return res?.items || [];
+}
+
+export async function updateRolePermissionsAction(roleId, permissionIds) {
+    const res = await fetchApi(PORT, `/roles/${roleId}/permissions`, {
+        method: 'PUT',
+        body: JSON.stringify({ permission_ids: permissionIds })
+    });
+    revalidatePath('/rbac');
+    return res;
+}
+
 export async function initializeSystemRolesAction() {
     await fetchApi(PORT, `/roles/admin`, { method: 'POST', body: JSON.stringify({ description: "System Administrator" }) });
-    await fetchApi(PORT, `/roles/doctor`, { method: 'POST', body: JSON.stringify({ description: "Clinical Staff" }) });
+    await fetchApi(PORT, `/roles/user`, { method: 'POST', body: JSON.stringify({ description: "Standard Clinical Practitioner" }) });
     await fetchApi(PORT, `/roles/supervisor`, { method: 'POST', body: JSON.stringify({ description: "Department Supervisor" }) });
     revalidatePath('/rbac');
 }

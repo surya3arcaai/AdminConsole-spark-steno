@@ -11,6 +11,7 @@ from shared.auth import get_current_user, UserContext
 
 from ..schemas import (
     DepartmentCreate, DepartmentResponse,
+    HospitalCreate, HospitalResponse,
     LocationCreate, LocationResponse,
     SpecializationCreate, SpecializationResponse,
     DemographicsResponse,
@@ -26,13 +27,14 @@ async def get_all_demographics(
     db: AsyncSession = Depends(get_db),
     current_user: UserContext = Depends(get_current_user),
 ):
-    """Get all demographic options (departments, locations, specializations)."""
+    """Get all demographic options (departments, hospitals/locations, specializations)."""
     departments = await crud.get_departments(db)
-    locations = await crud.get_locations(db)
+    hospitals = await crud.get_hospitals(db)
     specializations = await crud.get_specializations(db)
     return DemographicsResponse(
         departments=departments,
-        locations=locations,
+        hospitals=hospitals,
+        locations=hospitals,
         specializations=specializations,
     )
 
@@ -58,25 +60,27 @@ async def create_department(
     return await crud.create_department(db, data)
 
 
-# ============== Locations ==============
+# ============== Hospitals / Locations ==============
 
-@router.get("/locations", response_model=List[LocationResponse])
-async def list_locations(
+@router.get("/hospitals", response_model=List[HospitalResponse])
+@router.get("/locations", response_model=List[HospitalResponse])
+async def list_hospitals(
     db: AsyncSession = Depends(get_db),
     current_user: UserContext = Depends(get_current_user),
 ):
-    """List all locations."""
-    return await crud.get_locations(db)
+    """List all hospitals."""
+    return await crud.get_hospitals(db)
 
 
-@router.post("/locations", response_model=LocationResponse, status_code=201)
-async def create_location(
-    data: LocationCreate,
+@router.post("/hospitals", response_model=HospitalResponse, status_code=201)
+@router.post("/locations", response_model=HospitalResponse, status_code=201)
+async def create_hospital(
+    data: HospitalCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserContext = Depends(get_current_user),
 ):
-    """Create a new location."""
-    return await crud.create_location(db, data)
+    """Create a new hospital."""
+    return await crud.create_hospital(db, data)
 
 
 # ============== Specializations ==============

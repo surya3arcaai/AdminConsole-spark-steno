@@ -54,10 +54,14 @@ export default async function TemplatesPage() {
         ];
     }
 
+    const demographicsRes = await fetchApi(8005, "/demographics/") || { locations: [] };
+    const locations = demographicsRes.locations || [];
+
     return (
         <TemplateManager
             initialClinical={initialClinical}
             initialDischarge={initialDischarge}
+            locations={locations}
         />
     );
 }

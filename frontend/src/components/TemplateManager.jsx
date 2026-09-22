@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { createTemplateAction, updateTemplateAction, deleteTemplateAction } from '@/app/actions/template_actions';
 import { Plus, X, ListOrdered, Trash2 } from 'lucide-react';
 
-export default function TemplateManager({ initialClinical, initialDischarge }) {
+export default function TemplateManager({ initialClinical = [], initialDischarge = [], locations = [] }) {
     const [activeTab, setActiveTab] = useState('clinical');
     const [showEditor, setShowEditor] = useState(false);
     const [form, setForm] = useState({
@@ -11,6 +11,8 @@ export default function TemplateManager({ initialClinical, initialDischarge }) {
         name: '',
         description: '',
         type: 'clinical',
+        location_id: '',
+        is_default: false,
         headers: []
     });
 
@@ -39,7 +41,15 @@ export default function TemplateManager({ initialClinical, initialDischarge }) {
     };
 
     const openCreator = () => {
-        setForm({ id: null, name: `New ${activeTab === 'clinical' ? 'Clinical' : 'Discharge'} Template`, description: '', type: activeTab, headers: [] });
+        setForm({
+            id: null,
+            name: `New ${activeTab === 'clinical' ? 'Clinical' : 'Discharge'} Template`,
+            description: '',
+            type: activeTab,
+            location_id: '',
+            is_default: false,
+            headers: []
+        });
         setShowEditor(true);
     };
 
@@ -49,6 +59,8 @@ export default function TemplateManager({ initialClinical, initialDischarge }) {
             name: t.name,
             description: t.description || '',
             type: t.type,
+            location_id: t.location_id || '',
+            is_default: !!t.is_default,
             headers: parseHeaders(t.content)
         });
         setShowEditor(true);
@@ -68,7 +80,9 @@ export default function TemplateManager({ initialClinical, initialDischarge }) {
             name: form.name.trim(),
             description: form.description || 'Configured Headers for Steno',
             content: JSON.stringify(validHeaders),
-            variables_schema: { is_header_list: true }
+            variables_schema: { is_header_list: true },
+            location_id: form.location_id || null,
+            is_default: form.is_default
         };
 
         if (form.id && !form.id.startsWith('mock-')) {
@@ -102,7 +116,7 @@ export default function TemplateManager({ initialClinical, initialDischarge }) {
             <header className="dashboard-header fade-in">
                 <div>
                     <h1>Template Management</h1>
-                    <p style={{ color: 'var(--text-secondary)' }}>Configure document headers pulled by Arca Spark Steno</p>
+                    <p style={{ color: 'var(--text-secondary)' }}>Configure document headers and hospital scoping pulled by Arca Spark Steno</p>
                 </div>
                 <button className="btn-primary" onClick={openCreator}>+ Create Template Config</button>
             </header>
@@ -120,6 +134,32 @@ export default function TemplateManager({ initialClinical, initialDischarge }) {
                             <option value="clinical">Clinical Note</option>
                             <option value="discharge">Discharge Summary</option>
                         </select>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                        <select
+                            className="input-field"
+                            value={form.location_id}
+                            onChange={(e) => setForm({ ...form, location_id: e.target.value })}
+                            style={{ flex: 1 }}
+                        >
+                            <option value="">🌐 Common (All Hospitals / Facilities)</option>
+                            {locations.map((loc) => (
+                                <option key={loc.id} value={loc.id}>
+                                    🏥 {loc.name} {loc.city ? `(${loc.city})` : ''}
+                                </option>
+                            ))}
+                        </select>
+
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '0.9rem', flex: 1 }}>
+                            <input
+                                type="checkbox"
+                                checked={form.is_default}
+                                onChange={(e) => setForm({ ...form, is_default: e.target.checked })}
+                                style={{ width: '18px', height: '18px', accentColor: 'var(--primary-color)' }}
+                            />
+                            ⭐ Common Default Template (Fallback if no custom template chosen)
+                        </label>
                     </div>
 
                     <input className="input-field" placeholder="Brief Description..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
@@ -185,6 +225,7 @@ export default function TemplateManager({ initialClinical, initialDischarge }) {
                     <div className="grid-2 slide-up" style={{ animationDelay: '0.2s' }}>
                         {currentTemplates.map((t, i) => {
                             const headers = parseHeaders(t.content);
+                            const locObj = locations.find(l => l.id === t.location_id);
                             return (
                                 <article
                                     key={t.id || i}
@@ -194,9 +235,35 @@ export default function TemplateManager({ initialClinical, initialDischarge }) {
                                 >
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                         <div>
-                                            <h3 style={{ margin: 0, marginBottom: '0.5rem', color: 'var(--text-primary)' }}>{t.name}</h3>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.4rem' }}>
+                                                <h3 style={{ margin: 0, color: 'var(--text-primary)' }}>{t.name}</h3>
+                                                <span style={{
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '600',
+                                                    padding: '0.2rem 0.5rem',
+                                                    borderRadius: '4px',
+                                                    background: t.location_id ? 'rgba(234, 179, 8, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                                                    color: t.location_id ? '#fbbf24' : '#818cf8',
+                                                    border: `1px solid ${t.location_id ? 'rgba(234, 179, 8, 0.3)' : 'rgba(99, 102, 241, 0.3)'}`
+                                                }}>
+                                                    {locObj ? `🏥 ${locObj.name}` : '🌐 Common for All'}
+                                                </span>
+                                                {t.is_default && (
+                                                    <span style={{
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: '600',
+                                                        padding: '0.2rem 0.5rem',
+                                                        borderRadius: '4px',
+                                                        background: 'rgba(34, 197, 94, 0.15)',
+                                                        color: '#4ade80',
+                                                        border: '1px solid rgba(34, 197, 94, 0.3)'
+                                                    }}>
+                                                        ⭐ Default Fallback
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div style={{ color: 'rgba(197, 198, 199, 0.5)', fontSize: '0.8rem' }}>
-                                                Last updated: {new Date(t.updated_at).toLocaleDateString()}
+                                                Last updated: {new Date(t.updated_at || Date.now()).toLocaleDateString()}
                                             </div>
                                         </div>
 

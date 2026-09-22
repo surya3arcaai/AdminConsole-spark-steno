@@ -35,6 +35,7 @@ async def create_clinical_template(
 @router.get("/", response_model=PaginatedResponse[TemplateSummaryResponse])
 async def list_clinical_templates(
     status: Optional[str] = Query(None),
+    location_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -48,6 +49,7 @@ async def list_clinical_templates(
         db,
         template_type=TemplateType.CLINICAL,
         status=status_enum,
+        location_id=location_id,
         skip=skip,
         limit=page_size,
     )

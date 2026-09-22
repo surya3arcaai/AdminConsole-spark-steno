@@ -84,9 +84,57 @@ services:
     volumes:
       - ./shared:/app/shared:ro
 
+  loki:
+    image: grafana/loki:latest
+    container_name: arca_loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./grafana/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: arca_promtail
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./grafana/promtail-config.yaml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: arca_grafana
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_COOKIE_SECURE=false
+      - GF_SECURITY_COOKIE_SAMESITE=none
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - loki
+
 volumes:
   postgres_data:
+  grafana_data:
+  loki_data:
 
 networks:
   default:
     name: arca_spark_network
+

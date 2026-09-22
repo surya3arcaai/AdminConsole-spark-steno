@@ -5,13 +5,18 @@ import { revalidatePath } from "next/cache";
 const PORT = 8005;
 
 export async function createUserAction(data) {
+    const hospId = data.hospital_id || data.location_id || null;
     const res = await fetchApi(PORT, '/registerUser', {
         method: 'POST',
         body: JSON.stringify({
             name: data.name,
             email: data.email,
             phone: data.phone || '',
-            password: data.password || ''
+            password: data.password || '',
+            department_id: data.department_id || null,
+            hospital_id: hospId,
+            location_id: hospId,
+            specialization_id: data.specialization_id || null
         })
     }) || await fetchApi(PORT, '/', {
         method: 'POST',
@@ -80,6 +85,14 @@ export async function assignSupervisorAction(id, supervisor_id, isUpdate = false
     return res;
 }
 
+export async function removeSupervisorAction(id) {
+    const res = await fetchApi(PORT, `/${id}/supervisor`, {
+        method: 'DELETE'
+    });
+    revalidatePath('/users');
+    return res;
+}
+
 export async function createDepartmentAction(data) {
     const res = await fetchApi(PORT, '/demographics/departments', {
         method: 'POST',
@@ -89,14 +102,16 @@ export async function createDepartmentAction(data) {
     return res;
 }
 
-export async function createLocationAction(data) {
-    const res = await fetchApi(PORT, '/demographics/locations', {
+export async function createHospitalAction(data) {
+    const res = await fetchApi(PORT, '/demographics/hospitals', {
         method: 'POST',
         body: JSON.stringify(data)
     });
     revalidatePath('/users');
     return res;
 }
+
+export const createLocationAction = createHospitalAction;
 
 export async function createSpecializationAction(data) {
     const res = await fetchApi(PORT, '/demographics/specializations', {

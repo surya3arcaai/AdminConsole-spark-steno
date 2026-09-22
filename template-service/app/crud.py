@@ -192,8 +192,8 @@ async def create_template(
     type_str = (template_type.value if hasattr(template_type, "value") else str(template_type)).upper()
 
     sql = """
-        INSERT INTO templates (id, type, name, description, content, variables_schema, version, status, created_by, created_at, updated_at)
-        VALUES (CAST(:id AS uuid), CAST(:type AS templatetype), :name, :description, :content, CAST(:variables_schema AS json), 1, CAST('ACTIVE' AS templatestatus), :created_by, NOW(), NOW())
+        INSERT INTO templates (id, type, name, description, content, variables_schema, version, status, location_id, is_default, created_by, created_at, updated_at)
+        VALUES (CAST(:id AS uuid), CAST(:type AS templatetype), :name, :description, :content, CAST(:variables_schema AS json), 1, CAST('ACTIVE' AS templatestatus), :location_id, :is_default, :created_by, NOW(), NOW())
     """
     await db.execute(
         text(sql),
@@ -204,6 +204,8 @@ async def create_template(
             "description": data.description,
             "content": data.content,
             "variables_schema": json.dumps(data.variables_schema or {}),
+            "location_id": getattr(data, "location_id", None),
+            "is_default": bool(getattr(data, "is_default", False)),
             "created_by": created_by or "admin"
         }
     )
@@ -238,10 +240,11 @@ async def get_templates(
     db: AsyncSession,
     template_type: Optional[TemplateType] = None,
     status: Optional[TemplateStatus] = None,
+    location_id: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
 ) -> Tuple[List[Template], int]:
-    """Get templates with optional filtering."""
+    """Get templates with optional filtering by type, status, and hospital location."""
     query = select(Template)
     count_query = select(func.count(Template.id))
 
@@ -254,6 +257,14 @@ async def get_templates(
         status_str = (status.value if hasattr(status, "value") else str(status)).lower()
         query = query.where(func.lower(cast(Template.status, String)) == status_str)
         count_query = count_query.where(func.lower(cast(Template.status, String)) == status_str)
+
+    if location_id:
+        query = query.where(
+            (Template.location_id == location_id) | (Template.is_default == True) | (Template.location_id.is_(None))
+        )
+        count_query = count_query.where(
+            (Template.location_id == location_id) | (Template.is_default == True) | (Template.location_id.is_(None))
+        )
 
     total_result = await db.execute(count_query)
     total = total_result.scalar()
@@ -284,6 +295,10 @@ async def update_template(
         await db.execute(text("UPDATE templates SET content = :val, updated_at = NOW() WHERE id = CAST(:id AS uuid)"), {"val": update_data["content"], "id": template_id})
     if "variables_schema" in update_data:
         await db.execute(text("UPDATE templates SET variables_schema = CAST(:val AS json), updated_at = NOW() WHERE id = CAST(:id AS uuid)"), {"val": json.dumps(update_data["variables_schema"]), "id": template_id})
+    if "location_id" in update_data:
+        await db.execute(text("UPDATE templates SET location_id = :val, updated_at = NOW() WHERE id = CAST(:id AS uuid)"), {"val": update_data["location_id"], "id": template_id})
+    if "is_default" in update_data:
+        await db.execute(text("UPDATE templates SET is_default = :val, updated_at = NOW() WHERE id = CAST(:id AS uuid)"), {"val": bool(update_data["is_default"]), "id": template_id})
     if "status" in update_data:
         status_val = update_data["status"].value if hasattr(update_data["status"], "value") else str(update_data["status"])
         try:
